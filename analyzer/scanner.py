@@ -8,6 +8,7 @@ Handles real-world project structures including:
   - Next.js Pages Router: pages/blog/[id].tsx
   - TanStack Router: routes/__root.tsx, routes/posts.$postId.tsx
   - Remix: routes/_layout.tsx, routes/posts.$slug.tsx
+  - Feature-Sliced Design (FSD): app/, pages/, widgets/, features/, entities/, shared/
   - Barrel exports: components/index.ts re-exporting
   - Path aliases: @/, ~/, #/, src/
   - tsconfig paths (basic support)
@@ -84,9 +85,12 @@ def normalize_api_endpoint(raw: str) -> str:
     cleaned = re.sub(r"^/+", "/", cleaned)
     # Remove trailing ? from query params left behind
     cleaned = cleaned.rstrip("?&")
-    # If it became empty or just /, skip
-    if not cleaned or cleaned == "/":
-        return raw  # keep original if nothing meaningful left
+    # If stripping template vars left nothing meaningful, skip entirely
+    if not cleaned or cleaned == "/" or cleaned == raw.replace("${", "").replace("}", ""):
+        # Check if the raw string is entirely made of template vars
+        fully_template = TEMPLATE_VAR_RE.sub("", raw).strip("/").strip()
+        if not fully_template:
+            return ""  # signal to skip
     return cleaned
 
 
@@ -149,6 +153,75 @@ def detect_alias_paths(root: Path) -> dict[str, Path]:
         except Exception:
             pass
     return aliases
+
+
+# ───────────────────────── FSD Detection ─────────────────────────
+
+# FSD canonical layer names (top → bottom, highest index = lowest layer)
+FSD_LAYERS = ("app", "processes", "pages", "widgets", "features", "entities", "shared")
+
+# FSD layer hierarchy index — lower number = higher layer (more authority)
+FSD_LAYER_HIERARCHY: dict[str, int] = {
+    "app": 0,
+    "processes": 1,
+    "pages": 2,
+    "widgets": 3,
+    "features": 4,
+    "entities": 5,
+    "shared": 6,
+}
+
+# Common FSD segments inside slices
+FSD_SEGMENTS = {"ui", "api", "model", "lib", "config", "routes", "store", "styles", "i18n", "types", "consts"}
+
+
+def detect_fsd(root: Path) -> bool:
+    """
+    Detect if a project follows Feature-Sliced Design architecture.
+    Looks for at least 2 FSD-specific layer folders (entities, widgets, features)
+    at the src/ or root level, with segment-like sub-structure.
+    """
+    src_root = root / "src" if (root / "src").is_dir() else root
+
+    # FSD-specific folders that don't overlap with other patterns
+    # (pages/, features/ exist in non-FSD too, but entities/ and widgets/ are strong signals)
+    strong_signals = 0
+    weak_signals = 0
+
+    for layer_name in FSD_LAYERS:
+        layer_dir = src_root / layer_name
+        if not layer_dir.is_dir():
+            continue
+
+        if layer_name in ("entities", "widgets"):
+            # Strong FSD signals — these folders are rare outside FSD
+            strong_signals += 1
+        elif layer_name in ("features", "shared"):
+            # Check if they contain slices with segments (FSD pattern)
+            has_fsd_structure = False
+            try:
+                for child in layer_dir.iterdir():
+                    if child.is_dir() and not child.name.startswith("."):
+                        # Check for FSD segments inside slice
+                        child_dirs = {c.name for c in child.iterdir() if c.is_dir()}
+                        if child_dirs & FSD_SEGMENTS:
+                            has_fsd_structure = True
+                            break
+            except OSError:
+                pass
+            if has_fsd_structure:
+                weak_signals += 1
+        elif layer_name == "app":
+            # Check if app/ has segments, not Next.js routes
+            try:
+                child_dirs = {c.name for c in layer_dir.iterdir() if c.is_dir()}
+                if child_dirs & {"routes", "styles", "store", "providers", "entrypoint"}:
+                    weak_signals += 1
+            except OSError:
+                pass
+
+    # Need at least one strong signal or 2+ weak signals alongside features/shared
+    return strong_signals >= 1 or (weak_signals >= 2 and strong_signals >= 0)
 
 
 # ───────────────────────── Import Resolution ─────────────────────────
@@ -256,8 +329,10 @@ def scan_file(filepath: Path) -> dict:
     api_calls_raw += [m.group(1) for m in OPENAPI_FETCH_RE.finditer(content)]
     # openapi-react-query: $api.useQuery("get", "/path"), $api.useMutation("post", "/path"), etc.
     api_calls_raw += [m.group(1) for m in OPENAPI_RQ_RE.finditer(content)]
-    # Deduplicate & normalize
-    api_calls = list(dict.fromkeys(normalize_api_endpoint(c) for c in api_calls_raw))
+    # Deduplicate & normalize (filter out empty results from pure template vars)
+    api_calls = list(dict.fromkeys(
+        ep for ep in (normalize_api_endpoint(c) for c in api_calls_raw) if ep
+    ))
 
     # Route definitions
     routes = []
@@ -289,14 +364,20 @@ def scan_file(filepath: Path) -> dict:
 
 # ───────────────────────── Layer Classification ─────────────────────────
 
-def classify_layer(rel_path: str, framework: str, file_data: dict) -> str:
+def classify_layer(rel_path: str, framework: str, file_data: dict, is_fsd: bool = False) -> str:
     """
     Classify a file into a layer based on its path and the framework.
     Returns: 'page', 'feature', 'shared', 'api_service', 'api_route', 'layout', 'middleware'
+    Or for FSD: 'fsd_app', 'fsd_processes', 'fsd_pages', 'fsd_widgets', 'fsd_features', 'fsd_entities', 'fsd_shared'
     """
     p = rel_path.lower().replace("\\", "/")
     name = os.path.basename(rel_path).lower()
     stem = os.path.splitext(name)[0]
+
+    # ── Feature-Sliced Design ──
+    if is_fsd:
+        return _classify_fsd_layer(p, rel_path, file_data)
+
 
     # ── Next.js App Router ──
     if framework == "nextjs":
@@ -396,6 +477,22 @@ def classify_layer(rel_path: str, framework: str, file_data: dict) -> str:
     return "shared"
 
 
+def _classify_fsd_layer(p: str, rel_path: str, file_data: dict) -> str:
+    """Classify a file into an FSD layer based on its path within src/."""
+    # Normalize: strip leading src/ if present
+    normalized = p
+    if normalized.startswith("src/"):
+        normalized = normalized[4:]
+
+    # Match the first path segment to an FSD layer
+    for fsd_layer in FSD_LAYERS:
+        if normalized == fsd_layer or normalized.startswith(fsd_layer + "/"):
+            return f"fsd_{fsd_layer}"
+
+    # Files at src root (e.g., main.tsx, index.tsx) → fsd_app
+    return "fsd_app"
+
+
 LAYER_ORDER = {
     "page": 0,
     "layout": 0,
@@ -404,6 +501,14 @@ LAYER_ORDER = {
     "api_service": 3,
     "api_route": 3,
     "middleware": 2,
+    # FSD layers (ordered top → bottom)
+    "fsd_app": 0,
+    "fsd_processes": 1,
+    "fsd_pages": 2,
+    "fsd_widgets": 3,
+    "fsd_features": 4,
+    "fsd_entities": 5,
+    "fsd_shared": 6,
 }
 LAYER_LABELS = {
     "page": "Pages",
@@ -413,22 +518,38 @@ LAYER_LABELS = {
     "api_service": "API Services",
     "api_route": "API Routes",
     "middleware": "Middleware",
+    # FSD layers
+    "fsd_app": "App",
+    "fsd_processes": "Processes",
+    "fsd_pages": "Pages",
+    "fsd_widgets": "Widgets",
+    "fsd_features": "Features",
+    "fsd_entities": "Entities",
+    "fsd_shared": "Shared",
 }
 
 
 # ───────────────────────── Display Name ─────────────────────────
 
-def compute_display_name(fp: Path, root: Path, framework: str) -> str:
+def compute_display_name(fp: Path, root: Path, framework: str, is_fsd: bool = False) -> str:
     """
     Compute a human-friendly display name for a file.
     - Button/index.tsx → "Button"
     - app/blog/[slug]/page.tsx → "/blog/[slug]"
     - routes/posts.$postId.tsx → "/posts/$postId"
+    - FSD: features/auth/ui/LoginForm.tsx → "auth/LoginForm"
+    - FSD: entities/user/model/types.ts → "user/types"
+    - FSD: shared/ui/Button.tsx → "ui/Button"
     """
     rel = fp.relative_to(root)
     parts = list(rel.parts)
     stem = fp.stem
     name = fp.name
+
+    # ── FSD display names ──
+    if is_fsd:
+        return _compute_fsd_display_name(parts, stem)
+
 
     # ── Next.js App Router: app/blog/[id]/page.tsx → "/blog/[id]" ──
     if framework == "nextjs" and "app" in parts:
@@ -502,7 +623,83 @@ def compute_display_name(fp: Path, root: Path, framework: str) -> str:
     return stem
 
 
-# ───────────────────────── Route Extraction (File-based) ─────────────────────────
+def _compute_fsd_display_name(parts: list[str], stem: str) -> str:
+    """
+    Compute display name for FSD files.
+    Structure: src/<layer>/<slice>/<segment>/<file>
+    - features/auth/ui/LoginForm.tsx → "auth/LoginForm"
+    - entities/user/model/types.ts → "user/types"
+    - shared/ui/Button.tsx → "ui/Button"
+    - shared/api/client.ts → "api/client"
+    - app/routes/index.ts → "routes/index"
+    - pages/home/ui/HomePage.tsx → "home/HomePage"
+    """
+    # Strip leading 'src' if present
+    if parts and parts[0] == "src":
+        parts = parts[1:]
+
+    if not parts:
+        return stem
+
+    fsd_layers_set = set(FSD_LAYERS)
+
+    # First part should be the FSD layer name
+    if parts[0] in fsd_layers_set:
+        layer_name = parts[0]
+        rest = parts[1:]  # everything after the layer
+
+        if not rest:
+            return stem
+
+        # For app/ and shared/ — no slices, just segments
+        if layer_name in ("app", "shared"):
+            # rest = [segment, ..., file]
+            # Show: segment/file or just file
+            rest[-1] = stem  # replace filename with stem
+            # Folder-based index: shared/ui/Button/index.tsx → "ui/Button"
+            if stem == "index" and len(rest) >= 2:
+                rest = rest[:-1]  # drop index, use folder name
+            elif len(rest) >= 2 and rest[-1].lower() == rest[-2].lower():
+                rest = rest[:-1]  # SameName/SameName.tsx → SameName
+            return "/".join(rest)
+
+        # For entities, features, widgets, pages, processes — slices then segments
+        # rest = [slice, segment?, ..., file]
+        slice_name = rest[0]
+        inner = rest[1:]  # everything after the slice
+
+        if not inner:
+            return slice_name
+
+        inner[-1] = stem  # replace filename with stem
+
+        # Folder-based index: features/auth/ui/AuthForm/index.tsx → "auth/AuthForm"
+        if stem == "index" and len(inner) >= 2:
+            inner = inner[:-1]  # drop index, use folder name
+
+        # Ignore the segment name if it's a standard FSD segment - show slice/file
+        if len(inner) >= 2 and inner[0] in FSD_SEGMENTS:
+            # features/auth/ui/LoginForm.tsx → "auth/LoginForm"
+            return f"{slice_name}/{'/'.join(inner[1:])}"
+
+        # features/auth/index.ts → "auth"
+        if len(inner) == 1 and inner[0] == "index":
+            return slice_name
+
+        # features/auth/SomeName.tsx → "auth/SomeName"
+        # Same-name: features/auth/ui/AuthForm/AuthForm.tsx → "auth/AuthForm"
+        if len(inner) >= 2 and inner[-1].lower() == inner[-2].lower():
+            inner = inner[:-1]
+            if inner[0] in FSD_SEGMENTS and len(inner) >= 2:
+                return f"{slice_name}/{'/'.join(inner[1:])}"
+            return f"{slice_name}/{'/'.join(inner)}"
+
+        return f"{slice_name}/{'/'.join(inner)}"
+
+    # Fallback: not inside an FSD layer folder
+    if stem == "index" and len(parts) >= 2:
+        return parts[-2]
+    return stem
 
 def extract_file_route(fp: Path, root: Path, framework: str) -> Optional[str]:
     """Extract the URL route from file path for file-based routing frameworks."""
@@ -786,11 +983,104 @@ def _detect_circular_deps(
     return cycles
 
 
+def _detect_fsd_violations(
+    display_files: list[Path],
+    file_layers: dict[Path, str],
+    resolved_imports: dict[Path, list[Path]],
+    node_id_map: dict[Path, str],
+    resolve_through_barrels,
+) -> list[dict]:
+    """
+    Detect FSD import rule violations.
+    Rule: A module in a layer can only import from layers STRICTLY BELOW (higher index).
+    Same-layer cross-slice imports are also violations (except within app/ and shared/).
+    Imports within the same slice are always allowed.
+    """
+    violations: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+
+    def _get_fsd_slice(fp: Path) -> Optional[str]:
+        """Extract the FSD slice name from a file path.
+        e.g., .../entities/comment/api/commentApi.ts → 'comment'
+              .../shared/ui/Button.tsx → None (no slices in shared)
+        """
+        parts = list(fp.parts)
+        # Find the FSD layer folder
+        for i, part in enumerate(parts):
+            if part in set(FSD_LAYERS) and i + 1 < len(parts):
+                if part in ("app", "shared"):
+                    return None  # no slices in app/shared
+                return parts[i + 1]  # slice name
+        return None
+
+    for fp in display_files:
+        src_layer = file_layers.get(fp, "")
+        if not src_layer.startswith("fsd_"):
+            continue
+        src_layer_name = src_layer[4:]  # strip "fsd_"
+        src_hierarchy = FSD_LAYER_HIERARCHY.get(src_layer_name)
+        if src_hierarchy is None:
+            continue
+        src_id = node_id_map.get(fp)
+        if not src_id:
+            continue
+        src_slice = _get_fsd_slice(fp)
+
+        for dep in resolved_imports.get(fp, []):
+            targets = resolve_through_barrels(dep)
+            for actual_target in targets:
+                tgt_layer = file_layers.get(actual_target, "")
+                if not tgt_layer.startswith("fsd_"):
+                    continue
+                tgt_layer_name = tgt_layer[4:]
+                tgt_hierarchy = FSD_LAYER_HIERARCHY.get(tgt_layer_name)
+                if tgt_hierarchy is None:
+                    continue
+                tgt_id = node_id_map.get(actual_target)
+                if not tgt_id or src_id == tgt_id:
+                    continue
+
+                # Importing from a HIGHER layer (lower index) = violation
+                if tgt_hierarchy < src_hierarchy:
+                    key = (src_id, tgt_id)
+                    if key not in seen:
+                        seen.add(key)
+                        violations.append({
+                            "source": src_id,
+                            "target": tgt_id,
+                            "sourceLayer": src_layer_name,
+                            "targetLayer": tgt_layer_name,
+                            "type": "upward",
+                        })
+
+                # Same-layer cross-slice import = violation
+                # (except app and shared which don't have slices)
+                elif tgt_hierarchy == src_hierarchy and src_layer_name not in ("app", "shared"):
+                    tgt_slice = _get_fsd_slice(actual_target)
+                    # Only a violation if they're in DIFFERENT slices
+                    if src_slice != tgt_slice:
+                        key = (src_id, tgt_id)
+                        if key not in seen:
+                            seen.add(key)
+                            violations.append({
+                                "source": src_id,
+                                "target": tgt_id,
+                                "sourceLayer": src_layer_name,
+                                "targetLayer": tgt_layer_name,
+                                "type": "cross-slice",
+                            })
+
+    return violations
+
+
 def _scan_single_repo(root: Path) -> dict:
-    """Scan a single React/Next.js/TanStack/Remix repository."""
+    """Scan a single React/Next.js/TanStack/Remix/FSD repository."""
     # Detect framework and aliases
     framework = detect_framework(root)
     aliases = detect_alias_paths(root)
+
+    # Detect FSD architecture
+    is_fsd = detect_fsd(root)
 
     # Detect source root
     src_root = root / "src" if (root / "src").is_dir() else root
@@ -833,13 +1123,19 @@ def _scan_single_repo(root: Path) -> dict:
     file_layers: dict[Path, str] = {}
     for fp in all_files:
         rel = str(fp.relative_to(root))
-        file_layers[fp] = classify_layer(rel, framework, file_data[fp])
+        file_layers[fp] = classify_layer(rel, framework, file_data[fp], is_fsd=is_fsd)
 
     # 5. Tree-shaking: find entry points
     entry_files: set[Path] = set()
-    for fp, layer in file_layers.items():
-        if layer in ("page", "layout", "api_route"):
-            entry_files.add(fp)
+    if is_fsd:
+        # FSD: app layer and pages layer are entry points
+        for fp, layer in file_layers.items():
+            if layer in ("fsd_app", "fsd_pages"):
+                entry_files.add(fp)
+    else:
+        for fp, layer in file_layers.items():
+            if layer in ("page", "layout", "api_route"):
+                entry_files.add(fp)
 
     # If no pages detected, treat files with routes as pages
     if not entry_files:
@@ -893,7 +1189,7 @@ def _scan_single_repo(root: Path) -> dict:
         nid = re.sub(r"[^a-zA-Z0-9]", "_", rel)
         node_id_map[fp] = nid
         layer = file_layers[fp]
-        display_name = compute_display_name(fp, root, framework)
+        display_name = compute_display_name(fp, root, framework, is_fsd=is_fsd)
 
         # Extract route for pages
         file_route = extract_file_route(fp, root, framework)
@@ -943,6 +1239,7 @@ def _scan_single_repo(root: Path) -> dict:
                     })
 
     # API endpoint nodes
+    api_layer_index = 7 if is_fsd else 4
     for i, endpoint in enumerate(sorted(all_api_endpoints)):
         api_id = f"api_ep_{i}"
         nodes.append({
@@ -950,7 +1247,7 @@ def _scan_single_repo(root: Path) -> dict:
             "label": endpoint,
             "filePath": None,
             "layer": "api_endpoint",
-            "layerIndex": 4,
+            "layerIndex": api_layer_index,
             "layerLabel": "Backend API Endpoints",
             "apiCalls": [],
             "routes": [],
@@ -980,16 +1277,41 @@ def _scan_single_repo(root: Path) -> dict:
                         children.append(node_id_map[actual])
             groups.append({"parentId": page_id, "childIds": children})
 
-    layers = [
-        {"id": "page", "index": 0, "label": "Pages", "color": "#818cf8"},
-        {"id": "layout", "index": 0, "label": "Layouts", "color": "#a78bfa"},
-        {"id": "feature", "index": 1, "label": "Features", "color": "#22d3ee"},
-        {"id": "shared", "index": 2, "label": "Shared / UI", "color": "#34d399"},
-        {"id": "api_service", "index": 3, "label": "API Services", "color": "#fbbf24"},
-        {"id": "api_route", "index": 3, "label": "API Routes", "color": "#fb923c"},
-        {"id": "api_endpoint", "index": 4, "label": "Backend Endpoints", "color": "#f87171"},
-        {"id": "middleware", "index": 2, "label": "Middleware", "color": "#c084fc"},
-    ]
+    if is_fsd:
+        # FSD-specific layers
+        layers = [
+            {"id": "fsd_app", "index": 0, "label": "App", "color": "#818cf8"},
+            {"id": "fsd_processes", "index": 1, "label": "Processes", "color": "#a78bfa"},
+            {"id": "fsd_pages", "index": 2, "label": "Pages", "color": "#c084fc"},
+            {"id": "fsd_widgets", "index": 3, "label": "Widgets", "color": "#22d3ee"},
+            {"id": "fsd_features", "index": 4, "label": "Features", "color": "#2dd4bf"},
+            {"id": "fsd_entities", "index": 5, "label": "Entities", "color": "#fbbf24"},
+            {"id": "fsd_shared", "index": 6, "label": "Shared", "color": "#34d399"},
+            {"id": "api_endpoint", "index": 7, "label": "Backend Endpoints", "color": "#f87171"},
+        ]
+        # FSD groups: pages contain their widgets
+        groups = []
+        for fp in display_files:
+            if file_layers[fp] == "fsd_pages":
+                page_id = node_id_map[fp]
+                children = []
+                for dep in resolved_imports.get(fp, []):
+                    for actual in resolve_through_barrels(dep):
+                        dep_layer = file_layers.get(actual)
+                        if actual in node_id_map and dep_layer in ("fsd_widgets", "fsd_features"):
+                            children.append(node_id_map[actual])
+                groups.append({"parentId": page_id, "childIds": children})
+    else:
+        layers = [
+            {"id": "page", "index": 0, "label": "Pages", "color": "#818cf8"},
+            {"id": "layout", "index": 0, "label": "Layouts", "color": "#a78bfa"},
+            {"id": "feature", "index": 1, "label": "Features", "color": "#22d3ee"},
+            {"id": "shared", "index": 2, "label": "Shared / UI", "color": "#34d399"},
+            {"id": "api_service", "index": 3, "label": "API Services", "color": "#fbbf24"},
+            {"id": "api_route", "index": 3, "label": "API Routes", "color": "#fb923c"},
+            {"id": "api_endpoint", "index": 4, "label": "Backend Endpoints", "color": "#f87171"},
+            {"id": "middleware", "index": 2, "label": "Middleware", "color": "#c084fc"},
+        ]
 
     # ── Analytics ──
     circular_deps = _detect_circular_deps(resolved_imports, node_id_map)
@@ -999,18 +1321,34 @@ def _scan_single_repo(root: Path) -> dict:
         rel_dead = str(fp.relative_to(root))
         dead_files.append({
             "filePath": rel_dead,
-            "label": compute_display_name(fp, root, framework),
-            "layer": classify_layer(rel_dead, framework, file_data.get(fp, {})),
+            "label": compute_display_name(fp, root, framework, is_fsd=is_fsd),
+            "layer": classify_layer(rel_dead, framework, file_data.get(fp, {}), is_fsd=is_fsd),
         })
 
     dependents: dict[str, list[str]] = {}
     for src_id, tgt_id in edge_set:
         dependents.setdefault(tgt_id, []).append(src_id)
 
+    # FSD import rule violations: a module can only import from strictly lower layers
+    fsd_violations: list[dict] = []
+    if is_fsd:
+        fsd_violations = _detect_fsd_violations(
+            display_files, file_layers, resolved_imports, node_id_map, resolve_through_barrels
+        )
+
+    analytics: dict = {
+        "circularDeps": circular_deps,
+        "deadFiles": dead_files,
+        "dependents": dependents,
+    }
+    if is_fsd:
+        analytics["fsdViolations"] = fsd_violations
+
     return {
         "repoPath": str(root),
         "srcRoot": str(src_root),
         "framework": framework,
+        "isFsd": is_fsd,
         "layers": layers,
         "nodes": nodes,
         "edges": edges,
@@ -1023,12 +1361,9 @@ def _scan_single_repo(root: Path) -> dict:
             "totalEdges": len(edges),
             "apiEndpoints": len(all_api_endpoints),
             "framework": framework,
+            "isFsd": is_fsd,
         },
-        "analytics": {
-            "circularDeps": circular_deps,
-            "deadFiles": dead_files,
-            "dependents": dependents,
-        },
+        "analytics": analytics,
     }
 
 
@@ -1052,10 +1387,15 @@ def main():
 
     meta = structure["metadata"]
     print(f"Framework: {meta['framework']}")
+    if meta.get("isFsd"):
+        print("Architecture: Feature-Sliced Design (FSD)")
     print(f"Done! Analyzed {meta['analyzedFiles']}/{meta['totalFiles']} files "
           f"({meta['treeShakedFiles']} tree-shaked, {meta['barrelFiles']} barrels)")
     print(f"Nodes: {len(structure['nodes'])}, Edges: {meta['totalEdges']}, "
           f"API Endpoints: {meta['apiEndpoints']}")
+    if structure.get("analytics", {}).get("fsdViolations"):
+        violations = structure["analytics"]["fsdViolations"]
+        print(f"FSD Import Violations: {len(violations)}")
     print(f"Output: {output_path}")
 
 

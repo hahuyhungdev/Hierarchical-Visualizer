@@ -18,7 +18,10 @@ export async function createUser(name: string, email: string) {
   return data;
 }
 
-export async function updateUser(id: number, updates: { name?: string; email?: string }) {
+export async function updateUser(
+  id: number,
+  updates: { name?: string; email?: string },
+) {
   const { data, error } = await fetchClient.PUT("/users/{id}", {
     params: { path: { id } },
     body: updates,

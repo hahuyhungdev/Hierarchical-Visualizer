@@ -53,7 +53,11 @@ export default function StatsPanel() {
           variant="secondary"
           onClick={() => trackClick("export_report")}
         />
-        <Button label="Update Post #1" variant="secondary" onClick={handleUpdate} />
+        <Button
+          label="Update Post #1"
+          variant="secondary"
+          onClick={handleUpdate}
+        />
       </div>
     </div>
   );
