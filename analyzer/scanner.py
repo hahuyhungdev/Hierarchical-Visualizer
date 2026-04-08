@@ -54,6 +54,17 @@ API_CALL_RE = re.compile(
     re.IGNORECASE,
 )
 
+# openapi-fetch: anyVar.GET("/path"), fetchClient.POST("/path"), etc.
+OPENAPI_FETCH_RE = re.compile(
+    r"""[\w$]+\.(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s*\(\s*['"`]([^'"`\s]+)['"`]"""
+)
+
+# openapi-react-query: $api.useQuery("get", "/path"), $api.useMutation("post", "/path"), etc.
+OPENAPI_RQ_RE = re.compile(
+    r"""[\w$]+\.(?:useQuery|useSuspenseQuery|useMutation|useInfiniteQuery|queryOptions|prefetchQuery)"""
+    r"""\s*\(\s*['"`]\w+['"`]\s*,\s*['"`]([^'"`\s]+)['"`]"""
+)
+
 # Route definitions for classic React Router, TanStack, etc.
 ROUTE_RE = re.compile(
     r"""(?:path\s*[:=]\s*['"]([^'"]+)['"])|"""
@@ -241,7 +252,12 @@ def scan_file(filepath: Path) -> dict:
 
     # API calls — normalize template literals
     api_calls_raw = [m.group(1) for m in API_CALL_RE.finditer(content)]
-    api_calls = [normalize_api_endpoint(c) for c in api_calls_raw]
+    # openapi-fetch: client.GET("/path"), fetchClient.POST("/path"), etc.
+    api_calls_raw += [m.group(1) for m in OPENAPI_FETCH_RE.finditer(content)]
+    # openapi-react-query: $api.useQuery("get", "/path"), $api.useMutation("post", "/path"), etc.
+    api_calls_raw += [m.group(1) for m in OPENAPI_RQ_RE.finditer(content)]
+    # Deduplicate & normalize
+    api_calls = list(dict.fromkeys(normalize_api_endpoint(c) for c in api_calls_raw))
 
     # Route definitions
     routes = []

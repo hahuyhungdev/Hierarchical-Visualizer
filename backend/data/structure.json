@@ -1,6 +1,6 @@
 {
-  "repoPath": "/home/huyhung/projects/personals/visualization-repo/demo-app",
-  "srcRoot": "/home/huyhung/projects/personals/visualization-repo/demo-app/src",
+  "repoPath": "/home/huyhung/projects/personals/visualization-repo/demo-openapi",
+  "srcRoot": "/home/huyhung/projects/personals/visualization-repo/demo-openapi/src",
   "framework": "react",
   "layers": [
     {
@@ -77,7 +77,7 @@
       "layerLabel": "Shared / UI",
       "apiCalls": [],
       "routes": [],
-      "importCount": 2,
+      "importCount": 3,
       "lineCount": 33
     },
     {
@@ -93,6 +93,18 @@
       "lineCount": 24
     },
     {
+      "id": "src_features_PostComments_index_tsx",
+      "label": "PostComments",
+      "filePath": "src/features/PostComments/index.tsx",
+      "layer": "feature",
+      "layerIndex": 1,
+      "layerLabel": "Features",
+      "apiCalls": [],
+      "routes": [],
+      "importCount": 1,
+      "lineCount": 35
+    },
+    {
       "id": "src_features_PostFeed_index_tsx",
       "label": "PostFeed",
       "filePath": "src/features/PostFeed/index.tsx",
@@ -102,7 +114,7 @@
       "apiCalls": [],
       "routes": [],
       "importCount": 1,
-      "lineCount": 37
+      "lineCount": 55
     },
     {
       "id": "src_features_StatsPanel_tsx",
@@ -111,22 +123,36 @@
       "layer": "feature",
       "layerIndex": 1,
       "layerLabel": "Features",
+      "apiCalls": [
+        "/posts/{id}"
+      ],
+      "routes": [],
+      "importCount": 1,
+      "lineCount": 61
+    },
+    {
+      "id": "src_features_UserDetail_index_tsx",
+      "label": "UserDetail",
+      "filePath": "src/features/UserDetail/index.tsx",
+      "layer": "feature",
+      "layerIndex": 1,
+      "layerLabel": "Features",
       "apiCalls": [],
       "routes": [],
       "importCount": 1,
-      "lineCount": 49
+      "lineCount": 29
     },
     {
-      "id": "src_features_UserList_tsx",
+      "id": "src_features_UserList_index_tsx",
       "label": "UserList",
-      "filePath": "src/features/UserList.tsx",
+      "filePath": "src/features/UserList/index.tsx",
       "layer": "feature",
       "layerIndex": 1,
       "layerLabel": "Features",
       "apiCalls": [],
       "routes": [],
       "importCount": 2,
-      "lineCount": 56
+      "lineCount": 52
     },
     {
       "id": "src_hooks_useTracking_ts",
@@ -139,8 +165,32 @@
         "http://localhost:8000/api/interaction"
       ],
       "routes": [],
-      "importCount": 5,
-      "lineCount": 117
+      "importCount": 7,
+      "lineCount": 110
+    },
+    {
+      "id": "src_lib_api_client_ts",
+      "label": "client",
+      "filePath": "src/lib/api/client.ts",
+      "layer": "api_service",
+      "layerIndex": 3,
+      "layerLabel": "API Services",
+      "apiCalls": [],
+      "routes": [],
+      "importCount": 3,
+      "lineCount": 11
+    },
+    {
+      "id": "src_lib_api_index_ts",
+      "label": "api",
+      "filePath": "src/lib/api/index.ts",
+      "layer": "api_service",
+      "layerIndex": 3,
+      "layerLabel": "API Services",
+      "apiCalls": [],
+      "routes": [],
+      "importCount": 0,
+      "lineCount": 9
     },
     {
       "id": "src_main_tsx",
@@ -152,7 +202,7 @@
       "apiCalls": [],
       "routes": [],
       "importCount": 0,
-      "lineCount": 13
+      "lineCount": 25
     },
     {
       "id": "src_pages_DashboardPage_tsx",
@@ -164,7 +214,7 @@
       "apiCalls": [],
       "routes": [],
       "importCount": 1,
-      "lineCount": 22
+      "lineCount": 77
     },
     {
       "id": "src_pages_HomePage_tsx",
@@ -187,16 +237,18 @@
       "layerLabel": "API Services",
       "apiCalls": [
         "/users",
-        "/posts?_limit=5",
-        "/users/"
+        "/users",
+        "/users/{id}",
+        "/users/{id}",
+        "/posts/{id}/comments"
       ],
       "routes": [],
-      "importCount": 2,
-      "lineCount": 21
+      "importCount": 1,
+      "lineCount": 44
     },
     {
       "id": "api_ep_0",
-      "label": "/posts?_limit=5",
+      "label": "/posts/{id}",
       "filePath": null,
       "layer": "api_endpoint",
       "layerIndex": 4,
@@ -208,7 +260,7 @@
     },
     {
       "id": "api_ep_1",
-      "label": "/users",
+      "label": "/posts/{id}/comments",
       "filePath": null,
       "layer": "api_endpoint",
       "layerIndex": 4,
@@ -220,7 +272,7 @@
     },
     {
       "id": "api_ep_2",
-      "label": "/users/",
+      "label": "/users",
       "filePath": null,
       "layer": "api_endpoint",
       "layerIndex": 4,
@@ -232,6 +284,18 @@
     },
     {
       "id": "api_ep_3",
+      "label": "/users/{id}",
+      "filePath": null,
+      "layer": "api_endpoint",
+      "layerIndex": 4,
+      "layerLabel": "Backend API Endpoints",
+      "apiCalls": [],
+      "routes": [],
+      "importCount": 0,
+      "lineCount": 0
+    },
+    {
+      "id": "api_ep_4",
       "label": "http://localhost:8000/api/interaction",
       "filePath": null,
       "layer": "api_endpoint",
@@ -255,14 +319,24 @@
       "target": "src_pages_DashboardPage_tsx"
     },
     {
-      "id": "e_src_features_PostFeed_index_tsx__src_hooks_useTracking_ts",
-      "source": "src_features_PostFeed_index_tsx",
+      "id": "e_src_features_PostComments_index_tsx__src_hooks_useTracking_ts",
+      "source": "src_features_PostComments_index_tsx",
       "target": "src_hooks_useTracking_ts"
     },
     {
-      "id": "e_src_features_PostFeed_index_tsx__src_services_api_ts",
-      "source": "src_features_PostFeed_index_tsx",
+      "id": "e_src_features_PostComments_index_tsx__src_services_api_ts",
+      "source": "src_features_PostComments_index_tsx",
       "target": "src_services_api_ts"
+    },
+    {
+      "id": "e_src_features_PostComments_index_tsx__src_components_Card_Card_tsx",
+      "source": "src_features_PostComments_index_tsx",
+      "target": "src_components_Card_Card_tsx"
+    },
+    {
+      "id": "e_src_features_PostFeed_index_tsx__src_hooks_useTracking_ts",
+      "source": "src_features_PostFeed_index_tsx",
+      "target": "src_hooks_useTracking_ts"
     },
     {
       "id": "e_src_features_PostFeed_index_tsx__src_components_Card_Card_tsx",
@@ -270,9 +344,19 @@
       "target": "src_components_Card_Card_tsx"
     },
     {
+      "id": "e_src_features_PostFeed_index_tsx__src_components_Button_tsx",
+      "source": "src_features_PostFeed_index_tsx",
+      "target": "src_components_Button_tsx"
+    },
+    {
       "id": "e_src_features_StatsPanel_tsx__src_hooks_useTracking_ts",
       "source": "src_features_StatsPanel_tsx",
       "target": "src_hooks_useTracking_ts"
+    },
+    {
+      "id": "e_src_features_StatsPanel_tsx__src_lib_api_client_ts",
+      "source": "src_features_StatsPanel_tsx",
+      "target": "src_lib_api_client_ts"
     },
     {
       "id": "e_src_features_StatsPanel_tsx__src_components_Button_tsx",
@@ -280,24 +364,34 @@
       "target": "src_components_Button_tsx"
     },
     {
-      "id": "e_src_features_UserList_tsx__src_hooks_useTracking_ts",
-      "source": "src_features_UserList_tsx",
-      "target": "src_hooks_useTracking_ts"
-    },
-    {
-      "id": "e_src_features_UserList_tsx__src_services_api_ts",
-      "source": "src_features_UserList_tsx",
-      "target": "src_services_api_ts"
-    },
-    {
-      "id": "e_src_features_UserList_tsx__src_components_Card_Card_tsx",
-      "source": "src_features_UserList_tsx",
+      "id": "e_src_features_UserDetail_index_tsx__src_components_Card_Card_tsx",
+      "source": "src_features_UserDetail_index_tsx",
       "target": "src_components_Card_Card_tsx"
     },
     {
-      "id": "e_src_features_UserList_tsx__src_components_Button_tsx",
-      "source": "src_features_UserList_tsx",
+      "id": "e_src_features_UserDetail_index_tsx__src_hooks_useTracking_ts",
+      "source": "src_features_UserDetail_index_tsx",
+      "target": "src_hooks_useTracking_ts"
+    },
+    {
+      "id": "e_src_features_UserList_index_tsx__src_hooks_useTracking_ts",
+      "source": "src_features_UserList_index_tsx",
+      "target": "src_hooks_useTracking_ts"
+    },
+    {
+      "id": "e_src_features_UserList_index_tsx__src_components_Card_Card_tsx",
+      "source": "src_features_UserList_index_tsx",
+      "target": "src_components_Card_Card_tsx"
+    },
+    {
+      "id": "e_src_features_UserList_index_tsx__src_components_Button_tsx",
+      "source": "src_features_UserList_index_tsx",
       "target": "src_components_Button_tsx"
+    },
+    {
+      "id": "e_src_lib_api_index_ts__src_lib_api_client_ts",
+      "source": "src_lib_api_index_ts",
+      "target": "src_lib_api_client_ts"
     },
     {
       "id": "e_src_main_tsx__src_App_tsx",
@@ -315,9 +409,19 @@
       "target": "src_features_StatsPanel_tsx"
     },
     {
-      "id": "e_src_pages_DashboardPage_tsx__src_features_UserList_tsx",
+      "id": "e_src_pages_DashboardPage_tsx__src_features_UserList_index_tsx",
       "source": "src_pages_DashboardPage_tsx",
-      "target": "src_features_UserList_tsx"
+      "target": "src_features_UserList_index_tsx"
+    },
+    {
+      "id": "e_src_pages_DashboardPage_tsx__src_features_UserDetail_index_tsx",
+      "source": "src_pages_DashboardPage_tsx",
+      "target": "src_features_UserDetail_index_tsx"
+    },
+    {
+      "id": "e_src_pages_DashboardPage_tsx__src_features_PostComments_index_tsx",
+      "source": "src_pages_DashboardPage_tsx",
+      "target": "src_features_PostComments_index_tsx"
     },
     {
       "id": "e_src_pages_HomePage_tsx__src_hooks_useTracking_ts",
@@ -325,9 +429,9 @@
       "target": "src_hooks_useTracking_ts"
     },
     {
-      "id": "e_src_pages_HomePage_tsx__src_features_UserList_tsx",
+      "id": "e_src_pages_HomePage_tsx__src_features_UserList_index_tsx",
       "source": "src_pages_HomePage_tsx",
-      "target": "src_features_UserList_tsx"
+      "target": "src_features_UserList_index_tsx"
     },
     {
       "id": "e_src_pages_HomePage_tsx__src_features_PostFeed_index_tsx",
@@ -335,8 +439,13 @@
       "target": "src_features_PostFeed_index_tsx"
     },
     {
-      "id": "e_src_services_api_ts__api_ep_0",
+      "id": "e_src_services_api_ts__src_lib_api_client_ts",
       "source": "src_services_api_ts",
+      "target": "src_lib_api_client_ts"
+    },
+    {
+      "id": "e_src_features_StatsPanel_tsx__api_ep_0",
+      "source": "src_features_StatsPanel_tsx",
       "target": "api_ep_0"
     },
     {
@@ -350,9 +459,14 @@
       "target": "api_ep_2"
     },
     {
-      "id": "e_src_hooks_useTracking_ts__api_ep_3",
-      "source": "src_hooks_useTracking_ts",
+      "id": "e_src_services_api_ts__api_ep_3",
+      "source": "src_services_api_ts",
       "target": "api_ep_3"
+    },
+    {
+      "id": "e_src_hooks_useTracking_ts__api_ep_4",
+      "source": "src_hooks_useTracking_ts",
+      "target": "api_ep_4"
     }
   ],
   "groups": [
@@ -360,51 +474,73 @@
       "parentId": "src_pages_DashboardPage_tsx",
       "childIds": [
         "src_features_StatsPanel_tsx",
-        "src_features_UserList_tsx"
+        "src_features_UserList_index_tsx",
+        "src_features_UserDetail_index_tsx",
+        "src_features_PostComments_index_tsx"
       ]
     },
     {
       "parentId": "src_pages_HomePage_tsx",
       "childIds": [
-        "src_features_UserList_tsx",
+        "src_features_UserList_index_tsx",
         "src_features_PostFeed_index_tsx"
       ]
     }
   ],
   "metadata": {
-    "totalFiles": 12,
-    "analyzedFiles": 12,
-    "treeShakedFiles": 0,
+    "totalFiles": 17,
+    "analyzedFiles": 16,
+    "treeShakedFiles": 1,
     "barrelFiles": 1,
-    "totalEdges": 22,
-    "apiEndpoints": 4,
+    "totalEdges": 32,
+    "apiEndpoints": 5,
     "framework": "react"
   },
   "analytics": {
     "circularDeps": [],
-    "deadFiles": [],
+    "deadFiles": [
+      {
+        "filePath": "src/lib/api/v1.d.ts",
+        "label": "v1.d",
+        "layer": "api_service"
+      }
+    ],
     "dependents": {
       "src_components_Button_tsx": [
-        "src_features_UserList_tsx",
-        "src_features_StatsPanel_tsx"
+        "src_features_UserList_index_tsx",
+        "src_features_StatsPanel_tsx",
+        "src_features_PostFeed_index_tsx"
       ],
       "src_hooks_useTracking_ts": [
-        "src_features_UserList_tsx",
         "src_pages_DashboardPage_tsx",
+        "src_features_UserList_index_tsx",
         "src_features_StatsPanel_tsx",
+        "src_features_PostComments_index_tsx",
+        "src_features_UserDetail_index_tsx",
         "src_pages_HomePage_tsx",
         "src_features_PostFeed_index_tsx"
       ],
       "src_App_tsx": [
         "src_main_tsx"
       ],
-      "api_ep_0": [
-        "src_services_api_ts"
+      "src_components_Card_Card_tsx": [
+        "src_features_PostComments_index_tsx",
+        "src_features_UserDetail_index_tsx",
+        "src_features_PostFeed_index_tsx",
+        "src_features_UserList_index_tsx"
+      ],
+      "src_lib_api_client_ts": [
+        "src_services_api_ts",
+        "src_lib_api_index_ts",
+        "src_features_StatsPanel_tsx"
       ],
       "src_features_StatsPanel_tsx": [
         "src_pages_DashboardPage_tsx"
       ],
-      "src_features_UserList_tsx": [
+      "src_services_api_ts": [
+        "src_features_PostComments_index_tsx"
+      ],
+      "src_features_UserList_index_tsx": [
         "src_pages_HomePage_tsx",
         "src_pages_DashboardPage_tsx"
       ],
@@ -417,22 +553,26 @@
       "src_pages_HomePage_tsx": [
         "src_App_tsx"
       ],
-      "src_components_Card_Card_tsx": [
-        "src_features_PostFeed_index_tsx",
-        "src_features_UserList_tsx"
+      "src_features_UserDetail_index_tsx": [
+        "src_pages_DashboardPage_tsx"
       ],
       "src_features_PostFeed_index_tsx": [
         "src_pages_HomePage_tsx"
       ],
-      "src_services_api_ts": [
-        "src_features_PostFeed_index_tsx",
-        "src_features_UserList_tsx"
-      ],
       "api_ep_3": [
-        "src_hooks_useTracking_ts"
+        "src_services_api_ts"
+      ],
+      "src_features_PostComments_index_tsx": [
+        "src_pages_DashboardPage_tsx"
       ],
       "api_ep_1": [
         "src_services_api_ts"
+      ],
+      "api_ep_0": [
+        "src_features_StatsPanel_tsx"
+      ],
+      "api_ep_4": [
+        "src_hooks_useTracking_ts"
       ]
     }
   }
