@@ -1,0 +1,307 @@
+{
+  "repoPath": "/home/huyhung/projects/personals/visualization-repo/demo-app",
+  "srcRoot": "/home/huyhung/projects/personals/visualization-repo/demo-app/src",
+  "layers": [
+    {
+      "id": "page",
+      "index": 0,
+      "label": "Pages",
+      "color": "#4F46E5"
+    },
+    {
+      "id": "feature",
+      "index": 1,
+      "label": "Features",
+      "color": "#0891B2"
+    },
+    {
+      "id": "shared",
+      "index": 2,
+      "label": "Shared / UI",
+      "color": "#059669"
+    },
+    {
+      "id": "api_service",
+      "index": 3,
+      "label": "API Services",
+      "color": "#D97706"
+    },
+    {
+      "id": "api_endpoint",
+      "index": 4,
+      "label": "Backend Endpoints",
+      "color": "#DC2626"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "src__components__Button_tsx",
+      "label": "Button",
+      "filePath": "src/components/Button.tsx",
+      "layer": "shared",
+      "layerIndex": 2,
+      "layerLabel": "Shared / UI",
+      "apiCalls": [],
+      "routes": [],
+      "importCount": 2
+    },
+    {
+      "id": "src__components__Card_tsx",
+      "label": "Card",
+      "filePath": "src/components/Card.tsx",
+      "layer": "shared",
+      "layerIndex": 2,
+      "layerLabel": "Shared / UI",
+      "apiCalls": [],
+      "routes": [],
+      "importCount": 2
+    },
+    {
+      "id": "src__features__PostFeed_tsx",
+      "label": "PostFeed",
+      "filePath": "src/features/PostFeed.tsx",
+      "layer": "feature",
+      "layerIndex": 1,
+      "layerLabel": "Features",
+      "apiCalls": [],
+      "routes": [],
+      "importCount": 1
+    },
+    {
+      "id": "src__features__StatsPanel_tsx",
+      "label": "StatsPanel",
+      "filePath": "src/features/StatsPanel.tsx",
+      "layer": "feature",
+      "layerIndex": 1,
+      "layerLabel": "Features",
+      "apiCalls": [],
+      "routes": [],
+      "importCount": 1
+    },
+    {
+      "id": "src__features__UserList_tsx",
+      "label": "UserList",
+      "filePath": "src/features/UserList.tsx",
+      "layer": "feature",
+      "layerIndex": 1,
+      "layerLabel": "Features",
+      "apiCalls": [],
+      "routes": [],
+      "importCount": 2
+    },
+    {
+      "id": "src__hooks__useTracking_ts",
+      "label": "useTracking",
+      "filePath": "src/hooks/useTracking.ts",
+      "layer": "api_service",
+      "layerIndex": 3,
+      "layerLabel": "API Services",
+      "apiCalls": [
+        "http://localhost:8000/api/interaction"
+      ],
+      "routes": [],
+      "importCount": 5
+    },
+    {
+      "id": "src__pages__DashboardPage_tsx",
+      "label": "DashboardPage",
+      "filePath": "src/pages/DashboardPage.tsx",
+      "layer": "page",
+      "layerIndex": 0,
+      "layerLabel": "Pages",
+      "apiCalls": [],
+      "routes": [],
+      "importCount": 0
+    },
+    {
+      "id": "src__pages__HomePage_tsx",
+      "label": "HomePage",
+      "filePath": "src/pages/HomePage.tsx",
+      "layer": "page",
+      "layerIndex": 0,
+      "layerLabel": "Pages",
+      "apiCalls": [],
+      "routes": [],
+      "importCount": 0
+    },
+    {
+      "id": "src__services__api_ts",
+      "label": "api",
+      "filePath": "src/services/api.ts",
+      "layer": "api_service",
+      "layerIndex": 3,
+      "layerLabel": "API Services",
+      "apiCalls": [
+        "${BASE_URL}/users",
+        "${BASE_URL}/posts?_limit=5",
+        "${BASE_URL}/users/${id}"
+      ],
+      "routes": [],
+      "importCount": 2
+    },
+    {
+      "id": "api_endpoint_0",
+      "label": "${BASE_URL}/posts?_limit=5",
+      "filePath": null,
+      "layer": "api_endpoint",
+      "layerIndex": 4,
+      "layerLabel": "Backend API Endpoints",
+      "apiCalls": [],
+      "routes": [],
+      "importCount": 0
+    },
+    {
+      "id": "api_endpoint_1",
+      "label": "${BASE_URL}/users",
+      "filePath": null,
+      "layer": "api_endpoint",
+      "layerIndex": 4,
+      "layerLabel": "Backend API Endpoints",
+      "apiCalls": [],
+      "routes": [],
+      "importCount": 0
+    },
+    {
+      "id": "api_endpoint_2",
+      "label": "${BASE_URL}/users/${id}",
+      "filePath": null,
+      "layer": "api_endpoint",
+      "layerIndex": 4,
+      "layerLabel": "Backend API Endpoints",
+      "apiCalls": [],
+      "routes": [],
+      "importCount": 0
+    },
+    {
+      "id": "api_endpoint_3",
+      "label": "http://localhost:8000/api/interaction",
+      "filePath": null,
+      "layer": "api_endpoint",
+      "layerIndex": 4,
+      "layerLabel": "Backend API Endpoints",
+      "apiCalls": [],
+      "routes": [],
+      "importCount": 0
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_src__pages__HomePage_tsx__src__hooks__useTracking_ts",
+      "source": "src__pages__HomePage_tsx",
+      "target": "src__hooks__useTracking_ts"
+    },
+    {
+      "id": "e_src__pages__HomePage_tsx__src__features__UserList_tsx",
+      "source": "src__pages__HomePage_tsx",
+      "target": "src__features__UserList_tsx"
+    },
+    {
+      "id": "e_src__pages__HomePage_tsx__src__features__PostFeed_tsx",
+      "source": "src__pages__HomePage_tsx",
+      "target": "src__features__PostFeed_tsx"
+    },
+    {
+      "id": "e_src__features__UserList_tsx__src__hooks__useTracking_ts",
+      "source": "src__features__UserList_tsx",
+      "target": "src__hooks__useTracking_ts"
+    },
+    {
+      "id": "e_src__features__UserList_tsx__src__services__api_ts",
+      "source": "src__features__UserList_tsx",
+      "target": "src__services__api_ts"
+    },
+    {
+      "id": "e_src__features__UserList_tsx__src__components__Card_tsx",
+      "source": "src__features__UserList_tsx",
+      "target": "src__components__Card_tsx"
+    },
+    {
+      "id": "e_src__features__UserList_tsx__src__components__Button_tsx",
+      "source": "src__features__UserList_tsx",
+      "target": "src__components__Button_tsx"
+    },
+    {
+      "id": "e_src__features__StatsPanel_tsx__src__hooks__useTracking_ts",
+      "source": "src__features__StatsPanel_tsx",
+      "target": "src__hooks__useTracking_ts"
+    },
+    {
+      "id": "e_src__features__StatsPanel_tsx__src__components__Button_tsx",
+      "source": "src__features__StatsPanel_tsx",
+      "target": "src__components__Button_tsx"
+    },
+    {
+      "id": "e_src__features__PostFeed_tsx__src__hooks__useTracking_ts",
+      "source": "src__features__PostFeed_tsx",
+      "target": "src__hooks__useTracking_ts"
+    },
+    {
+      "id": "e_src__features__PostFeed_tsx__src__services__api_ts",
+      "source": "src__features__PostFeed_tsx",
+      "target": "src__services__api_ts"
+    },
+    {
+      "id": "e_src__features__PostFeed_tsx__src__components__Card_tsx",
+      "source": "src__features__PostFeed_tsx",
+      "target": "src__components__Card_tsx"
+    },
+    {
+      "id": "e_src__pages__DashboardPage_tsx__src__hooks__useTracking_ts",
+      "source": "src__pages__DashboardPage_tsx",
+      "target": "src__hooks__useTracking_ts"
+    },
+    {
+      "id": "e_src__pages__DashboardPage_tsx__src__features__StatsPanel_tsx",
+      "source": "src__pages__DashboardPage_tsx",
+      "target": "src__features__StatsPanel_tsx"
+    },
+    {
+      "id": "e_src__pages__DashboardPage_tsx__src__features__UserList_tsx",
+      "source": "src__pages__DashboardPage_tsx",
+      "target": "src__features__UserList_tsx"
+    },
+    {
+      "id": "e_src__services__api_ts__api_endpoint_0",
+      "source": "src__services__api_ts",
+      "target": "api_endpoint_0"
+    },
+    {
+      "id": "e_src__services__api_ts__api_endpoint_1",
+      "source": "src__services__api_ts",
+      "target": "api_endpoint_1"
+    },
+    {
+      "id": "e_src__services__api_ts__api_endpoint_2",
+      "source": "src__services__api_ts",
+      "target": "api_endpoint_2"
+    },
+    {
+      "id": "e_src__hooks__useTracking_ts__api_endpoint_3",
+      "source": "src__hooks__useTracking_ts",
+      "target": "api_endpoint_3"
+    }
+  ],
+  "groups": [
+    {
+      "parentId": "src__pages__HomePage_tsx",
+      "childIds": [
+        "src__features__UserList_tsx",
+        "src__features__PostFeed_tsx"
+      ]
+    },
+    {
+      "parentId": "src__pages__DashboardPage_tsx",
+      "childIds": [
+        "src__features__StatsPanel_tsx",
+        "src__features__UserList_tsx"
+      ]
+    }
+  ],
+  "metadata": {
+    "totalFiles": 11,
+    "analyzedFiles": 9,
+    "treeShakedFiles": 2,
+    "totalEdges": 19,
+    "apiEndpoints": 4
+  }
+}
