@@ -17,26 +17,29 @@ A hierarchical visualization system for React/TypeScript repositories with real-
                             └──────────────┘
 ```
 
+![result](image.png)
+![alt text](image-1.png)
+
 ## Components
 
-| Component | Tech | Port | Purpose |
-|-----------|------|------|---------|
-| **Analyzer** | Python + regex | — | Scans React repos, builds `structure.json` |
-| **Backend** | FastAPI + WebSocket | 8000 | Serves structure data, broadcasts runtime events |
-| **Dashboard** | React Flow + Dagre | 5173 | Interactive hierarchical visualization |
-| **Demo App** | React + Router | 3001 | Sample app with 2 pages, 3 features, tracking hook |
+| Component     | Tech                | Port | Purpose                                            |
+| ------------- | ------------------- | ---- | -------------------------------------------------- |
+| **Analyzer**  | Python + regex      | —    | Scans React repos, builds `structure.json`         |
+| **Backend**   | FastAPI + WebSocket | 8000 | Serves structure data, broadcasts runtime events   |
+| **Dashboard** | React Flow + Dagre  | 5173 | Interactive hierarchical visualization             |
+| **Demo App**  | React + Router      | 3001 | Sample app with 2 pages, 3 features, tracking hook |
 
 ## Layering Model
 
 The analyzer classifies every file into a strict layer:
 
-| Layer | Source | Color |
-|-------|--------|-------|
-| **Pages** | `src/pages/`, route definitions | Purple |
-| **Features** | `src/features/`, `src/modules/` | Cyan |
-| **Shared / UI** | `src/components/`, `src/ui/` | Green |
-| **API Services** | `src/services/`, `src/api/` | Amber |
-| **Backend Endpoints** | Extracted from `fetch`/`axios` calls | Red |
+| Layer                 | Source                               | Color  |
+| --------------------- | ------------------------------------ | ------ |
+| **Pages**             | `src/pages/`, route definitions      | Purple |
+| **Features**          | `src/features/`, `src/modules/`      | Cyan   |
+| **Shared / UI**       | `src/components/`, `src/ui/`         | Green  |
+| **API Services**      | `src/services/`, `src/api/`          | Amber  |
+| **Backend Endpoints** | Extracted from `fetch`/`axios` calls | Red    |
 
 ## Quick Start
 
@@ -96,8 +99,12 @@ function MyComponent() {
 ```json
 {
   "repoPath": "/abs/path",
-  "layers": [{ "id": "page", "index": 0, "label": "Pages", "color": "#4F46E5" }],
-  "nodes": [{ "id": "...", "label": "HomePage", "layer": "page", "layerIndex": 0 }],
+  "layers": [
+    { "id": "page", "index": 0, "label": "Pages", "color": "#4F46E5" }
+  ],
+  "nodes": [
+    { "id": "...", "label": "HomePage", "layer": "page", "layerIndex": 0 }
+  ],
   "edges": [{ "id": "...", "source": "...", "target": "..." }],
   "groups": [{ "parentId": "page_id", "childIds": ["feature_id"] }],
   "metadata": { "totalFiles": 12, "analyzedFiles": 10, "treeShakedFiles": 2 }
