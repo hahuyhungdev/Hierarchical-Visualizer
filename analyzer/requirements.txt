@@ -1,1 +1,1 @@
-pathlib
+# No external dependencies — uses only Python stdlib

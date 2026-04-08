@@ -63,6 +63,22 @@ ROUTE_RE = re.compile(
 )
 
 
+# Normalize template-literal API endpoints: ${BASE_URL}/users → /users
+TEMPLATE_VAR_RE = re.compile(r"\$\{[^}]+\}")
+
+def normalize_api_endpoint(raw: str) -> str:
+    """Strip JS template variables and clean up API endpoint strings."""
+    cleaned = TEMPLATE_VAR_RE.sub("", raw)
+    # Remove leading empty segments from stripped vars: e.g. "/users" stays
+    cleaned = re.sub(r"^/+", "/", cleaned)
+    # Remove trailing ? from query params left behind
+    cleaned = cleaned.rstrip("?&")
+    # If it became empty or just /, skip
+    if not cleaned or cleaned == "/":
+        return raw  # keep original if nothing meaningful left
+    return cleaned
+
+
 # ───────────────────────── Framework Detection ─────────────────────────
 
 def detect_framework(root: Path) -> str:
@@ -126,7 +142,27 @@ def detect_alias_paths(root: Path) -> dict[str, Path]:
 
 # ───────────────────────── Import Resolution ─────────────────────────
 
+# Per-scan import resolution cache to avoid O(n²) repeated disk lookups
+_resolve_cache: dict[tuple[str, str], Optional[Path]] = {}
+
+
 def resolve_import_path(
+    source_file: Path,
+    import_path: str,
+    src_root: Path,
+    aliases: dict[str, Path],
+) -> Optional[Path]:
+    """Resolve a relative or alias import to an actual file path (cached)."""
+    cache_key = (str(source_file.parent), import_path)
+    if cache_key in _resolve_cache:
+        return _resolve_cache[cache_key]
+
+    result = _resolve_import_path_uncached(source_file, import_path, src_root, aliases)
+    _resolve_cache[cache_key] = result
+    return result
+
+
+def _resolve_import_path_uncached(
     source_file: Path,
     import_path: str,
     src_root: Path,
@@ -203,8 +239,9 @@ def scan_file(filepath: Path) -> dict:
         if imp:
             imports.append(imp)
 
-    # API calls
-    api_calls = [m.group(1) for m in API_CALL_RE.finditer(content)]
+    # API calls — normalize template literals
+    api_calls_raw = [m.group(1) for m in API_CALL_RE.finditer(content)]
+    api_calls = [normalize_api_endpoint(c) for c in api_calls_raw]
 
     # Route definitions
     routes = []
@@ -512,10 +549,166 @@ def find_used_files(entry_files: set[Path], all_imports: dict[Path, list[Path]])
 
 # ───────────────────────── Main Scanner ─────────────────────────
 
+def detect_workspaces(root: Path) -> list[Path]:
+    """Detect monorepo workspace packages from package.json."""
+    pkg_json = root / "package.json"
+    if not pkg_json.exists():
+        return []
+    try:
+        pkg = json.loads(pkg_json.read_text(encoding="utf-8", errors="ignore"))
+    except Exception:
+        return []
+
+    workspace_globs = pkg.get("workspaces", [])
+    # Yarn/npm format: "workspaces": ["packages/*", "apps/*"]
+    # pnpm uses pnpm-workspace.yaml but also supports this
+    if isinstance(workspace_globs, dict):
+        workspace_globs = workspace_globs.get("packages", [])
+    if not isinstance(workspace_globs, list):
+        return []
+
+    # Also check for pnpm-workspace.yaml
+    pnpm_ws = root / "pnpm-workspace.yaml"
+    if pnpm_ws.exists():
+        try:
+            content = pnpm_ws.read_text(encoding="utf-8", errors="ignore")
+            # Simple YAML parsing for packages list
+            in_packages = False
+            for line in content.split("\n"):
+                stripped = line.strip()
+                if stripped == "packages:":
+                    in_packages = True
+                    continue
+                if in_packages and stripped.startswith("- "):
+                    glob_pattern = stripped[2:].strip().strip("'\"")
+                    if glob_pattern not in workspace_globs:
+                        workspace_globs.append(glob_pattern)
+                elif in_packages and stripped and not stripped.startswith("#"):
+                    in_packages = False
+        except Exception:
+            pass
+
+    # Resolve glob patterns to actual directories
+    import glob as glob_mod
+    packages: list[Path] = []
+    for pattern in workspace_globs:
+        if not isinstance(pattern, str):
+            continue
+        # Expand glob
+        matches = glob_mod.glob(str(root / pattern))
+        for m in matches:
+            mp = Path(m).resolve()
+            if mp.is_dir() and (mp / "package.json").exists():
+                packages.append(mp)
+    return packages
+
+
 def scan_repository(repo_path: str) -> dict:
     """Scan a React/Next.js/TanStack/Remix repository and produce a hierarchical structure."""
     root = Path(repo_path).resolve()
 
+    if not root.is_dir():
+        raise ValueError(f"'{repo_path}' is not a valid directory")
+
+    # Clear import resolution cache for fresh scan
+    _resolve_cache.clear()
+
+    # Detect monorepo workspaces
+    workspace_packages = detect_workspaces(root)
+    if workspace_packages:
+        return _scan_monorepo(root, workspace_packages)
+
+    return _scan_single_repo(root)
+
+
+def _scan_monorepo(root: Path, packages: list[Path]) -> dict:
+    """Scan a monorepo by scanning each workspace package and merging results."""
+    all_nodes: list[dict] = []
+    all_edges: list[dict] = []
+    all_groups: list[dict] = []
+    total_files = 0
+    analyzed_files = 0
+    tree_shaked = 0
+    barrel_count = 0
+    api_endpoints = 0
+    frameworks: set[str] = set()
+
+    for pkg_dir in packages:
+        try:
+            result = _scan_single_repo(pkg_dir)
+        except Exception:
+            continue
+        pkg_name = pkg_dir.name
+        # Prefix node IDs to avoid collisions
+        id_map: dict[str, str] = {}
+        for node in result["nodes"]:
+            old_id = node["id"]
+            new_id = f"{pkg_name}__{old_id}"
+            id_map[old_id] = new_id
+            node["id"] = new_id
+            node["label"] = f"{pkg_name}/{node['label']}"
+            if node["filePath"]:
+                # Make path relative to monorepo root
+                try:
+                    abs_path = (pkg_dir / node["filePath"]).resolve()
+                    node["filePath"] = str(abs_path.relative_to(root))
+                except ValueError:
+                    node["filePath"] = f"{pkg_name}/{node['filePath']}"
+            all_nodes.append(node)
+
+        for edge in result["edges"]:
+            edge["source"] = id_map.get(edge["source"], edge["source"])
+            edge["target"] = id_map.get(edge["target"], edge["target"])
+            edge["id"] = f"{pkg_name}__{edge['id']}"
+            all_edges.append(edge)
+
+        for group in result["groups"]:
+            group["parentId"] = id_map.get(group["parentId"], group["parentId"])
+            group["childIds"] = [id_map.get(c, c) for c in group["childIds"]]
+            all_groups.append(group)
+
+        meta = result["metadata"]
+        total_files += meta["totalFiles"]
+        analyzed_files += meta["analyzedFiles"]
+        tree_shaked += meta["treeShakedFiles"]
+        barrel_count += meta["barrelFiles"]
+        api_endpoints += meta["apiEndpoints"]
+        frameworks.add(meta["framework"])
+
+    layers = [
+        {"id": "page", "index": 0, "label": "Pages", "color": "#818cf8"},
+        {"id": "layout", "index": 0, "label": "Layouts", "color": "#a78bfa"},
+        {"id": "feature", "index": 1, "label": "Features", "color": "#22d3ee"},
+        {"id": "shared", "index": 2, "label": "Shared / UI", "color": "#34d399"},
+        {"id": "api_service", "index": 3, "label": "API Services", "color": "#fbbf24"},
+        {"id": "api_route", "index": 3, "label": "API Routes", "color": "#fb923c"},
+        {"id": "api_endpoint", "index": 4, "label": "Backend Endpoints", "color": "#f87171"},
+        {"id": "middleware", "index": 2, "label": "Middleware", "color": "#c084fc"},
+    ]
+
+    return {
+        "repoPath": str(root),
+        "srcRoot": str(root),
+        "framework": ", ".join(sorted(frameworks)),
+        "layers": layers,
+        "nodes": all_nodes,
+        "edges": all_edges,
+        "groups": all_groups,
+        "metadata": {
+            "totalFiles": total_files,
+            "analyzedFiles": analyzed_files,
+            "treeShakedFiles": tree_shaked,
+            "barrelFiles": barrel_count,
+            "totalEdges": len(all_edges),
+            "apiEndpoints": api_endpoints,
+            "framework": ", ".join(sorted(frameworks)),
+            "workspaces": len(packages),
+        },
+    }
+
+
+def _scan_single_repo(root: Path) -> dict:
+    """Scan a single React/Next.js/TanStack/Remix repository."""
     # Detect framework and aliases
     framework = detect_framework(root)
     aliases = detect_alias_paths(root)
