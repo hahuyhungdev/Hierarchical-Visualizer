@@ -1,15 +1,56 @@
-# Repo Visualizer
+# StructDecipher
 
-A high-performance static analysis and visualization system for React/TypeScript repositories. Combines a Python scanner with a React Flow dashboard to produce interactive dependency graphs with real-time runtime tracking.
+A high-performance static analysis and visualization system for React/TypeScript repositories. Instantly generates interactive dependency graphs with layer classification, circular dependency detection, and API endpoint tracking.
 
-![Dependency Graph](image.png)
-![Active Tracking](image-1.png)
 
-## Architecture
+![alt text](image-2.png)
+![alt text](image-3.png)
+![alt text](image-4.png)
+## Quick Start
+
+```bash
+npx structdecipher
+```
+
+That's it. Opens an interactive dashboard in your browser showing your project's architecture.
+
+```bash
+# Scan a specific project
+npx structdecipher ./my-react-app
+
+# Output JSON only
+npx structdecipher . --json
+
+# Save to file
+npx structdecipher . -o structure.json
+```
+
+See the [npm package README](packages/cli/README.md) for full CLI docs and programmatic API.
+
+---
+
+## Development Setup
+
+This section is for contributing to StructDecipher itself.
+
+### Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│  server/                                                            │
+│  packages/cli/           (npm package — TypeScript)                  │
+│  ┌──────────────┐    scanRepository()     ┌──────────────────────┐  │
+│  │  Scanner      │ ────────────────────►  │  HTTP Server         │  │
+│  │  (8 modules)  │   ScanResult           │  (pure Node.js)      │  │
+│  └──────────────┘                         └──────┬───────────────┘  │
+│                                                   │                  │
+│  ┌────────────────────────────────────────────────┘                  │
+│  │  dashboard/          (pre-built Vite static files)               │
+│  │  React Flow + Dagre                                              │
+│  └────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  server/                 (Python — original dev server)              │
 │  ┌──────────────┐    scan_repository()    ┌──────────────────────┐  │
 │  │  Scanner      │ ────────────────────►  │  FastAPI Backend     │  │
 │  │  (8 modules)  │   structure.json       │  :8000               │  │
@@ -17,28 +58,26 @@ A high-performance static analysis and visualization system for React/TypeScript
 │                                           └──────┬──────┬───────┘  │
 └──────────────────────────────────────────────────┼──────┼──────────┘
                                         WebSocket  │      │  WebSocket
-                                                   │      │
                             ┌──────────────────────┘      └───────────────────┐
-                            │                                                 │
                     ┌───────▼──────────┐                           ┌──────────▼──────┐
-                    │  Dashboard        │                           │  Demo Apps       │
-                    │  React Flow       │                           │  :3001  :3002    │
-                    │  :5173            │                           │  :3003           │
-                    └──────────────────┘                           └─────────────────┘
+                    │  Dashboard (dev)  │                           │  Demo Apps       │
+                    │  :5173            │                           │  :3001  :3002    │
+                    └──────────────────┘                           │  :3003           │
+                                                                   └─────────────────┘
 ```
 
-## Components
+### Components
 
-| Component        | Tech                        | Port | Purpose                                               |
-| ---------------- | --------------------------- | ---- | ----------------------------------------------------- |
-| **Scanner**      | Python 3.12 + regex         | —    | Static analysis: imports, layers, APIs, cycles        |
-| **Backend**      | FastAPI + WebSocket         | 8000 | REST API + real-time event broadcasting               |
-| **Dashboard**    | React Flow + Dagre + Vite   | 5173 | Interactive graph visualization with analytics panel  |
-| **demo-app**     | Classic React + Router      | 3001 | 12 files, 15 nodes, 22 edges, 4 API endpoints         |
-| **demo-openapi** | openapi-fetch + React Query | 3002 | 17 files, 21 nodes, 36 edges, 6 API endpoints         |
-| **demo-fsd**     | Feature-Sliced Design       | 3003 | 42 files, 30 nodes, 56 edges, FSD violation detection |
+| Component          | Tech                        | Port | Purpose                                               |
+| ------------------ | --------------------------- | ---- | ----------------------------------------------------- |
+| **packages/cli**   | TypeScript + Node.js        | 5173 | npm package: scanner + server + dashboard              |
+| **server/**        | Python 3.12 + FastAPI       | 8000 | Dev server with WebSocket + runtime tracking           |
+| **dashboard/**     | React Flow + Dagre + Vite   | 5173 | Interactive graph visualization + analytics panel      |
+| **demo-app**       | Classic React + Router      | 3001 | 12 files, 15 nodes, 22 edges, 4 API endpoints         |
+| **demo-openapi**   | openapi-fetch + React Query | 3002 | 17 files, 21 nodes, 36 edges, 6 API endpoints         |
+| **demo-fsd**       | Feature-Sliced Design       | 3003 | 42 files, 30 nodes, 56 edges, FSD violation detection |
 
-## Quick Start
+### Dev Server (Python + WebSocket)
 
 ```bash
 chmod +x start.sh
@@ -47,7 +86,7 @@ chmod +x start.sh
 
 Open the Dashboard at `http://localhost:5173`, enter a repo path, and click **Sync**.
 
-### Manual Start
+#### Manual Start
 
 ```bash
 # 1. Backend

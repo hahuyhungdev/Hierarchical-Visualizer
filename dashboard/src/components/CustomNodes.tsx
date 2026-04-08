@@ -21,6 +21,7 @@ interface VizNodeData {
   inCycle?: boolean;
   impacted?: boolean;
   apiMatch?: boolean;
+  hideFilePath?: boolean;
 }
 
 export const VizNode = memo(function VizNode({
@@ -95,7 +96,7 @@ export const VizNode = memo(function VizNode({
             {d.layerLabel}
           </span>
         </div>
-        {d.filePath && <div className="viz-node__path">{d.filePath}</div>}
+        {d.filePath && !d.hideFilePath && <div className="viz-node__path">{d.filePath}</div>}
         {(d.lineCount ?? 0) > 0 && (
           <div className="viz-node__lines">{d.lineCount} lines</div>
         )}

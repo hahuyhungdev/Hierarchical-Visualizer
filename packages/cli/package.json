@@ -1,0 +1,58 @@
+{
+  "name": "structdecipher",
+  "version": "1.0.0",
+  "description": "Visualize React/TypeScript project architecture — dependency graphs, layer classification, circular deps, FSD support",
+  "type": "module",
+  "bin": {
+    "structdecipher": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "dashboard",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "build:dashboard": "cd ../../dashboard && npm run build && rm -rf ../packages/cli/dashboard && cp -r dist ../packages/cli/dashboard",
+    "prepublishOnly": "npm run build:dashboard && npm run build",
+    "dev": "tsc --watch",
+    "test": "node --test dist/tests/*.js"
+  },
+  "keywords": [
+    "react",
+    "typescript",
+    "visualization",
+    "dependency-graph",
+    "architecture",
+    "static-analysis",
+    "nextjs",
+    "remix",
+    "fsd",
+    "feature-sliced-design",
+    "openapi"
+  ],
+  "author": "huyhung",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hahuyhungdev/structdecipher"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "glob": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.6.0"
+  }
+}

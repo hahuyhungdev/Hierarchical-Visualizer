@@ -16,9 +16,20 @@ import "@xyflow/react/dist/style.css";
 import { toPng, toSvg } from "html-to-image";
 
 import { VizNode } from "./components/CustomNodes";
+import {
+  DirectoryGroupNode,
+  DirectoryGroupExpandedNode,
+} from "./components/DirectoryGroupNodes";
+import {
+  SettingsPanel,
+  type SettingsState,
+  type Theme,
+  type EdgeStyle,
+  type CustomColors,
+} from "./components/SettingsPanel";
 import { useWebSocket } from "./hooks/useWebSocket";
 import {
-  buildFlowElements,
+  buildFlowElementsAsync,
   LAYER_COLORS,
   type LayerBand,
   type VizNodeData,
@@ -27,16 +38,18 @@ import type { StructureData, AnalyticsData } from "./types";
 
 const API_BASE = "/api";
 
-const nodeTypes = { vizNode: VizNode };
+const nodeTypes = {
+  vizNode: VizNode,
+  directoryGroup: DirectoryGroupNode,
+  directoryGroupExpanded: DirectoryGroupExpandedNode,
+};
 
 function Dashboard() {
   const [repoPath, setRepoPath] = useState("");
   const [structure, setStructure] = useState<StructureData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
-    new Set(),
-  );
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [layerBands, setLayerBands] = useState<LayerBand[]>([]);
 
@@ -49,6 +62,74 @@ function Dashboard() {
 
   // Legend collapse
   const [legendCollapsed, setLegendCollapsed] = useState(false);
+
+  // Settings state
+  const [settingsOpen, setSettingsOpen] = useState(true);
+  const [settings, setSettings] = useState<SettingsState>(() => {
+    try {
+      const saved = localStorage.getItem("sd-settings");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          theme: parsed.theme || "dark",
+          hiddenLayers: new Set(parsed.hiddenLayers || []),
+          edgeStyle: parsed.edgeStyle || "smoothstep",
+          showLabels: parsed.showLabels ?? true,
+          animateEdges: parsed.animateEdges ?? true,
+          customColors: parsed.customColors || {},
+          nodeSpacing: parsed.nodeSpacing ?? 1,
+          gridVisible: parsed.gridVisible ?? true,
+        };
+      }
+    } catch {
+      /* ignore */
+    }
+    return {
+      theme: "dark" as Theme,
+      hiddenLayers: new Set<string>(),
+      edgeStyle: "smoothstep" as EdgeStyle,
+      showLabels: true,
+      animateEdges: true,
+      customColors: {} as CustomColors,
+      nodeSpacing: 1,
+      gridVisible: true,
+    };
+  });
+
+  // Persist settings
+  useEffect(() => {
+    localStorage.setItem(
+      "sd-settings",
+      JSON.stringify({
+        ...settings,
+        hiddenLayers: Array.from(settings.hiddenLayers),
+      }),
+    );
+  }, [settings]);
+
+  // Apply theme + custom color overrides to document
+  useEffect(() => {
+    const el = document.documentElement;
+    el.setAttribute("data-theme", settings.theme);
+    // Apply custom color overrides as inline CSS variables
+    const colorMap: Record<string, string> = {
+      bg: "--bg",
+      surface: "--surface",
+      accent: "--accent",
+      text: "--text",
+      border: "--border",
+      gridColor: "--grid-color",
+      nodeBg: "--node-bg",
+    };
+    for (const [key, cssVar] of Object.entries(colorMap)) {
+      const val = settings.customColors[key as keyof CustomColors];
+      if (val) {
+        el.style.setProperty(cssVar, val);
+      } else {
+        el.style.removeProperty(cssVar);
+      }
+    }
+  }, [settings.theme, settings.customColors]);
 
   // Analytics state
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
@@ -95,105 +176,156 @@ function Dashboard() {
       .catch(() => {});
   }, [analyticsOpen, structure]);
 
-  // ─── Recalculate layout ───
+  // ─── Recalculate layout (async ELK) ───
   useEffect(() => {
     if (!structure) return;
-    const result = buildFlowElements(
-      structure,
-      collapsedGroups,
+    let cancelled = false;
+
+    // Filter hidden layers
+    const filteredStructure =
+      settings.hiddenLayers.size > 0
+        ? {
+            ...structure,
+            nodes: structure.nodes.filter(
+              (n) => !settings.hiddenLayers.has(n.layer),
+            ),
+            edges: structure.edges.filter((e) => {
+              const srcNode = structure.nodes.find((n) => n.id === e.source);
+              const tgtNode = structure.nodes.find((n) => n.id === e.target);
+              return (
+                srcNode &&
+                tgtNode &&
+                !settings.hiddenLayers.has(srcNode.layer) &&
+                !settings.hiddenLayers.has(tgtNode.layer)
+              );
+            }),
+          }
+        : structure;
+
+    buildFlowElementsAsync(
+      filteredStructure,
+      expandedGroups,
       selectedNodeId,
-    );
-    // Apply search match highlighting
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchIds = new Set<string>();
-      for (const n of result.nodes) {
-        const d = n.data as VizNodeData;
-        if (
-          d.label.toLowerCase().includes(q) ||
-          (d.filePath && d.filePath.toLowerCase().includes(q)) ||
-          d.routes.some((r) => r.toLowerCase().includes(q))
-        ) {
-          matchIds.add(n.id);
+      settings.nodeSpacing,
+    ).then((result) => {
+      if (cancelled) return;
+      // Apply search match highlighting
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchIds = new Set<string>();
+        for (const n of result.nodes) {
+          const d = n.data as VizNodeData;
+          if (
+            d.label.toLowerCase().includes(q) ||
+            (d.filePath && d.filePath.toLowerCase().includes(q)) ||
+            d.routes.some((r) => r.toLowerCase().includes(q))
+          ) {
+            matchIds.add(n.id);
+          }
         }
+        setSearchResults(Array.from(matchIds));
+        result.nodes = result.nodes.map((n) => {
+          if (matchIds.has(n.id)) {
+            return { ...n, data: { ...n.data, searchMatch: true } };
+          }
+          return n;
+        });
+      } else {
+        setSearchResults([]);
       }
-      setSearchResults(Array.from(matchIds));
-      result.nodes = result.nodes.map((n) => {
-        if (matchIds.has(n.id)) {
-          return { ...n, data: { ...n.data, searchMatch: true } };
-        }
-        return n;
-      });
-    } else {
-      setSearchResults([]);
-    }
 
-    // ─── Apply analytics mode ───
-    if (analyticsMode === "heatmap" && analytics?.heatmap) {
-      const counts = analytics.heatmap;
-      const maxCount = Math.max(1, ...Object.values(counts));
-      result.nodes = result.nodes.map((n) => {
-        const d = n.data as VizNodeData;
-        const name = d.label.replace(/ [▸▾]$/, "");
-        const count = counts[name] || 0;
-        return {
-          ...n,
-          data: {
-            ...d,
-            heatmapIntensity: count / maxCount,
-            heatmapCount: count,
-          },
-        };
-      });
-    }
-    if (analyticsMode === "circular" && structure?.analytics?.circularDeps) {
-      const cycleNodes = new Set(structure.analytics.circularDeps.flat());
-      result.nodes = result.nodes.map((n) => ({
-        ...n,
-        data: { ...n.data, inCycle: cycleNodes.has(n.id) },
-      }));
-    }
-    if (analyticsMode === "impact" && selectedNodeId && analytics?.dependents) {
-      const deps = analytics.dependents;
-      const impacted = new Set<string>();
-      const q = [selectedNodeId];
-      while (q.length) {
-        const id = q.shift()!;
-        if (impacted.has(id)) continue;
-        impacted.add(id);
-        for (const p of deps[id] || []) {
-          if (!impacted.has(p)) q.push(p);
-        }
+      // ─── Apply analytics mode ───
+      if (analyticsMode === "heatmap" && analytics?.heatmap) {
+        const counts = analytics.heatmap;
+        const maxCount = Math.max(1, ...Object.values(counts));
+        result.nodes = result.nodes.map((n) => {
+          const d = n.data as VizNodeData;
+          const name = d.label.replace(/ [▸▾]$/, "");
+          const count = counts[name] || 0;
+          return {
+            ...n,
+            data: {
+              ...d,
+              heatmapIntensity: count / maxCount,
+              heatmapCount: count,
+            },
+          };
+        });
       }
-      result.nodes = result.nodes.map((n) => ({
-        ...n,
-        data: { ...n.data, impacted: impacted.has(n.id) },
-      }));
-    }
-    if (analyticsMode === "api" && selectedApiEndpoint) {
-      result.nodes = result.nodes.map((n) => {
-        const d = n.data as VizNodeData;
-        const match =
-          d.apiCalls.includes(selectedApiEndpoint) ||
-          d.label === selectedApiEndpoint;
-        return {
+      if (analyticsMode === "circular" && structure?.analytics?.circularDeps) {
+        const cycleNodes = new Set(structure.analytics.circularDeps.flat());
+        result.nodes = result.nodes.map((n) => ({
           ...n,
-          data: { ...d, apiMatch: match, dimmed: !match && !d.highlighted },
-        };
-      });
-    }
+          data: { ...n.data, inCycle: cycleNodes.has(n.id) },
+        }));
+      }
+      if (
+        analyticsMode === "impact" &&
+        selectedNodeId &&
+        analytics?.dependents
+      ) {
+        const deps = analytics.dependents;
+        const impacted = new Set<string>();
+        const q = [selectedNodeId];
+        while (q.length) {
+          const id = q.shift()!;
+          if (impacted.has(id)) continue;
+          impacted.add(id);
+          for (const p of deps[id] || []) {
+            if (!impacted.has(p)) q.push(p);
+          }
+        }
+        result.nodes = result.nodes.map((n) => ({
+          ...n,
+          data: { ...n.data, impacted: impacted.has(n.id) },
+        }));
+      }
+      if (analyticsMode === "api" && selectedApiEndpoint) {
+        result.nodes = result.nodes.map((n) => {
+          const d = n.data as VizNodeData;
+          const match =
+            d.apiCalls.includes(selectedApiEndpoint) ||
+            d.label === selectedApiEndpoint;
+          return {
+            ...n,
+            data: { ...d, apiMatch: match, dimmed: !match && !d.highlighted },
+          };
+        });
+      }
 
-    setNodes(result.nodes);
-    setEdges(result.edges);
-    setLayerBands(result.layerBands);
+      // Apply showLabels and edgeStyle settings
+      if (!settings.showLabels) {
+        result.nodes = result.nodes.map((n) => ({
+          ...n,
+          data: { ...n.data, hideFilePath: true },
+        }));
+      }
+      result.edges = result.edges.map((e) => ({
+        ...e,
+        type: settings.edgeStyle === "bezier" ? "default" : settings.edgeStyle,
+        animated: e.animated && settings.animateEdges,
+      }));
+
+      setNodes(result.nodes);
+      setEdges(result.edges);
+      setLayerBands(result.layerBands);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [
     structure,
-    collapsedGroups,
+    expandedGroups,
     selectedNodeId,
     searchQuery,
     analyticsMode,
     analytics,
     selectedApiEndpoint,
+    settings.hiddenLayers,
+    settings.edgeStyle,
+    settings.animateEdges,
+    settings.showLabels,
+    settings.nodeSpacing,
     setNodes,
     setEdges,
   ]);
@@ -305,7 +437,9 @@ function Dashboard() {
     try {
       const fn = format === "png" ? toPng : toSvg;
       const dataUrl = await fn(el, {
-        backgroundColor: "#0a0e1a",
+        backgroundColor:
+          settings.customColors.bg ||
+          (settings.theme === "light" ? "#f8fafc" : "#0a0e1a"),
         quality: 1,
         pixelRatio: 2,
       });
@@ -349,24 +483,18 @@ function Dashboard() {
     setSelectedNodeId(null);
   }, []);
 
-  // ─── Double-click → collapse/expand ───
-  const onNodeDoubleClick: NodeMouseHandler = useCallback(
-    (_event, node) => {
-      if (!structure) return;
-      const isGroupParent = structure.groups.some(
-        (g) => g.parentId === node.id && g.childIds.length > 0,
-      );
-      if (isGroupParent) {
-        setCollapsedGroups((prev) => {
-          const next = new Set(prev);
-          if (next.has(node.id)) next.delete(node.id);
-          else next.add(node.id);
-          return next;
-        });
-      }
-    },
-    [structure],
-  );
+  // ─── Double-click → expand/collapse directory groups ───
+  const onNodeDoubleClick: NodeMouseHandler = useCallback((_event, node) => {
+    const d = node.data as VizNodeData;
+    if (d.isDirectoryGroup) {
+      setExpandedGroups((prev) => {
+        const next = new Set(prev);
+        if (next.has(node.id)) next.delete(node.id);
+        else next.add(node.id);
+        return next;
+      });
+    }
+  }, []);
 
   // ─── Legend items ───
   const legendItems = useMemo(
@@ -384,7 +512,7 @@ function Dashboard() {
     <div className="app-layout">
       {/* ─── Toolbar ─── */}
       <div className="toolbar">
-        <h1>⬡ Repo Visualizer</h1>
+        <h1>⬡ StructDecipher</h1>
         <input
           type="text"
           placeholder="Absolute path to React repository..."
@@ -424,6 +552,13 @@ function Dashboard() {
             title="Analytics Panel"
           >
             📊 Analytics
+          </button>
+          <button
+            className={`toolbar-btn-secondary ${settingsOpen ? "toolbar-btn-secondary--active" : ""}`}
+            onClick={() => setSettingsOpen((p) => !p)}
+            title="Settings"
+          >
+            ⚙ Settings
           </button>
         </div>
 
@@ -794,14 +929,77 @@ function Dashboard() {
           maxZoom={3}
           proOptions={{ hideAttribution: true }}
         >
-          <Background color="#1e293b" gap={24} size={1} />
+          {settings.gridVisible && (
+            <Background color="var(--grid-color)" gap={24} size={1} />
+          )}
           <Controls position="bottom-right" />
           <MiniMap
             nodeColor={(n) => (n.data as VizNodeData).color || "#475569"}
-            maskColor="rgba(15,23,42,0.85)"
-            style={{ background: "#0f172a", borderRadius: 8 }}
+            maskColor="var(--minimap-mask)"
+            style={{ background: "var(--minimap-bg)", borderRadius: 8 }}
           />
         </ReactFlow>
+
+        {/* ─── Settings Panel ─── */}
+        {settingsOpen && (
+          <SettingsPanel
+            settings={settings}
+            onChange={setSettings}
+            onClose={() => setSettingsOpen(false)}
+            onExpandAll={() => {
+              if (!structure) return;
+              const allGroupIds = new Set<string>();
+              const seen = new Map<string, boolean>();
+              for (const n of structure.nodes) {
+                const fp = n.filePath;
+                if (!fp) continue;
+                const parts = fp.replace(/\\/g, "/").split("/");
+                parts.pop();
+                if (parts.length <= 1) continue;
+                const start = parts[0] === "src" ? 1 : 0;
+                if (start >= parts.length) continue;
+                const dir = parts.slice(start).join("/");
+                const key = `${n.layer}::${dir}`;
+                if (!seen.has(key)) seen.set(key, false);
+                if (seen.get(key)) continue;
+                // need 2+ nodes for group
+                const count = structure.nodes.filter(
+                  (m) =>
+                    m.layer === n.layer &&
+                    m.filePath &&
+                    (() => {
+                      const mp = m.filePath!.replace(/\\/g, "/").split("/");
+                      mp.pop();
+                      if (mp.length <= 1) return false;
+                      const ms = mp[0] === "src" ? 1 : 0;
+                      if (ms >= mp.length) return false;
+                      return mp.slice(ms).join("/") === dir;
+                    })(),
+                ).length;
+                if (count >= 2) allGroupIds.add(`__group__${n.layer}__${dir}`);
+                seen.set(key, true);
+              }
+              setExpandedGroups(allGroupIds);
+            }}
+            onCollapseAll={() => setExpandedGroups(new Set())}
+            groupCount={(() => {
+              if (!structure) return 0;
+              const groups = new Set<string>();
+              for (const n of structure.nodes) {
+                const fp = n.filePath;
+                if (!fp) continue;
+                const parts = fp.replace(/\\/g, "/").split("/");
+                parts.pop();
+                if (parts.length <= 1) continue;
+                const start = parts[0] === "src" ? 1 : 0;
+                if (start >= parts.length) continue;
+                groups.add(`${n.layer}::${parts.slice(start).join("/")}`);
+              }
+              return groups.size;
+            })()}
+            expandedCount={expandedGroups.size}
+          />
+        )}
 
         {/* ─── Legend ─── */}
         <div className={`legend ${legendCollapsed ? "legend--collapsed" : ""}`}>
